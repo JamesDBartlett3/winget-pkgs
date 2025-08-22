@@ -5,12 +5,14 @@ This guide explains how to set up automation that will automatically create pull
 ## 🎯 **Two Automation Options**
 
 ### **Option 1: Fork-Only Automation (Current Setup) ✅**
+
 - Creates PRs within your fork (automation branch)
 - You manually create clean PRs to upstream
 - **Pros**: Simple, safe, no special permissions needed
 - **Cons**: Requires manual step to create upstream PR
 
 ### **Option 2: Direct Upstream Automation 🚀**
+
 - Automatically creates PRs to Microsoft's winget-pkgs repo
 - Completely hands-off once configured
 - **Pros**: Fully automated, zero manual intervention
@@ -90,12 +92,14 @@ Microsoft team reviews and merges
 ## 🛡️ **Security Considerations**
 
 ### **Personal Access Token Security:**
+
 - ✅ Store only in GitHub Secrets (never commit to code)
 - ✅ Use minimal required permissions
 - ✅ Set reasonable expiration dates
 - ✅ Rotate tokens periodically
 
 ### **Automation Safety:**
+
 - ✅ Only downloads from official Bitwig URLs
 - ✅ Validates checksums before creating PR
 - ✅ Creates descriptive PR with full verification details
@@ -104,6 +108,7 @@ Microsoft team reviews and merges
 ## 📋 **Switching Between Modes**
 
 ### **Currently Active: Fork-Only Mode**
+
 ```powershell
 # Check current workflows
 ls .github/workflows/
@@ -113,6 +118,7 @@ ls .github/workflows/
 ```
 
 ### **To Enable Direct Upstream Mode:**
+
 ```powershell
 # 1. Ensure PAT_TOKEN secret is configured in GitHub
 # 2. Both workflows will be available:
@@ -125,7 +131,9 @@ git commit -m "Switch to upstream-only automation"
 ```
 
 ### **To Use Both Modes:**
+
 You can run both workflows simultaneously:
+
 - Fork workflow creates PRs for your review
 - Upstream workflow creates direct PRs to Microsoft
 
@@ -134,12 +142,14 @@ This gives you a staging area to review before upstream submission.
 ## 🔍 **Testing the Setup**
 
 ### **Test Fork-Only Mode:**
+
 ```powershell
 # Trigger manual run
 # Go to GitHub Actions tab → "Auto-update Bitwig Studio" → "Run workflow"
 ```
 
 ### **Test Direct Upstream Mode:**
+
 ```powershell
 # 1. Ensure PAT_TOKEN is configured
 # 2. Go to GitHub Actions tab → "Auto-update Bitwig Studio (Direct to Upstream)" → "Run workflow"
@@ -149,17 +159,21 @@ This gives you a staging area to review before upstream submission.
 ## 📊 **Monitoring Automation**
 
 ### **GitHub Actions Tab:**
+
 - Monitor workflow runs
 - Check logs for errors
 - View success/failure status
 
 ### **Expected Outcomes:**
+
 - ✅ **New version found**: PR created automatically
 - ℹ️ **No new version**: Workflow completes with no action
 - ❌ **Error**: Check logs for download/validation issues
 
 ### **Email Notifications:**
+
 GitHub can email you about workflow failures:
+
 1. Go to GitHub Settings → Notifications
 2. Enable "Actions" notifications
 3. You'll get emails if automation fails
@@ -167,24 +181,28 @@ GitHub can email you about workflow failures:
 ## 🆘 **Troubleshooting**
 
 ### **PAT Token Issues:**
+
 ```bash
 # Error: "Bad credentials" or "Not found"
 # Solution: Regenerate PAT token with correct permissions
 ```
 
 ### **Permission Issues:**
+
 ```bash
 # Error: "Resource not accessible by integration"
 # Solution: Ensure PAT has 'public_repo' scope
 ```
 
 ### **Workflow Not Running:**
+
 ```bash
 # Check if workflow is enabled in GitHub Actions tab
 # Ensure PAT_TOKEN secret exists and is spelled correctly
 ```
 
 ### **PR Creation Fails:**
+
 ```bash
 # Check GitHub CLI authentication in workflow logs
 # Verify your fork has the automation branch pushed

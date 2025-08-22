@@ -3,12 +3,14 @@
 ## 📋 **Common Tasks**
 
 ### **Setup (One-time)**
+
 ```powershell
 # Set up branch structure
 .\Tools\Manage-ForkWorkflow.ps1 -Action setup
 ```
 
 ### **Daily Maintenance**
+
 ```powershell
 # Sync with upstream Microsoft repo
 .\Tools\Manage-ForkWorkflow.ps1 -Action sync
@@ -18,6 +20,7 @@
 ```
 
 ### **Creating Upstream PRs**
+
 ```powershell
 # 1. Create clean PR branch
 .\Tools\Manage-ForkWorkflow.ps1 -Action create-pr
@@ -25,7 +28,7 @@
 # 2. Add your manifests (copy from automation branch)
 git checkout automation
 # Copy manifests to temporary location
-git checkout your-pr-branch  
+git checkout your-pr-branch
 # Add manifests to PR branch
 
 # 3. Commit and push
@@ -37,6 +40,7 @@ git push -u origin your-pr-branch
 ```
 
 ### **Manual Package Updates**
+
 ```powershell
 # Check for latest version
 .\Tools\Update-BitwigManifest.ps1
@@ -51,26 +55,28 @@ git push -u origin your-pr-branch
 ## 🔍 **Verification Commands**
 
 ### **Check Branch Cleanliness**
+
 ```powershell
 # Verify no automation files in master
 git checkout master
 Test-Path ".github/workflows/bitwig-*"  # Should be False
 Test-Path "Tools/Update-Bitwig*"        # Should be False
 
-# Verify automation files exist in automation branch  
+# Verify automation files exist in automation branch
 git checkout automation
 Test-Path ".github/workflows/bitwig-*"  # Should be True
 Test-Path "Tools/Update-Bitwig*"        # Should be True
 ```
 
 ### **Pre-PR Checklist**
+
 ```powershell
 # Before creating upstream PR, verify branch is clean:
 git checkout your-pr-branch
 
 # These should all return False:
 Test-Path ".github/workflows/bitwig-auto-update.yml"
-Test-Path "Tools/Update-BitwigManifest.ps1" 
+Test-Path "Tools/Update-BitwigManifest.ps1"
 Test-Path "Tools/Manage-ForkWorkflow.ps1"
 Test-Path "docs/bitwig-automation.md"
 
@@ -80,15 +86,16 @@ git status  # Should show only manifests/ changes
 
 ## 🌳 **Branch Overview**
 
-| Branch | Purpose | Contains | Used For |
-|--------|---------|----------|----------|
-| `master` | Clean upstream sync | Official files only | Base for PR branches |
-| `automation` | Your automation tools | Scripts, workflows, docs | Running automation |
-| `package-*` | Individual PRs | Single package manifests | Upstream contributions |
+| Branch       | Purpose               | Contains                 | Used For               |
+| ------------ | --------------------- | ------------------------ | ---------------------- |
+| `master`     | Clean upstream sync   | Official files only      | Base for PR branches   |
+| `automation` | Your automation tools | Scripts, workflows, docs | Running automation     |
+| `package-*`  | Individual PRs        | Single package manifests | Upstream contributions |
 
 ## ⚡ **Emergency Commands**
 
 ### **Fix Polluted PR Branch**
+
 ```powershell
 # Delete and recreate clean branch
 git checkout master
@@ -97,6 +104,7 @@ git branch -D polluted-branch
 ```
 
 ### **Reset Automation Branch**
+
 ```powershell
 # If automation branch gets corrupted
 git checkout automation
@@ -104,6 +112,7 @@ git reset --hard origin/automation
 ```
 
 ### **Force Sync with Upstream**
+
 ```powershell
 # Nuclear option: force sync everything
 git checkout master
@@ -132,4 +141,5 @@ ls .github/workflows/ | Where-Object {$_.Name -like "*bitwig*"}
 ```
 
 ---
+
 💡 **Pro Tip**: Bookmark this page and keep it handy for quick reference!

@@ -18,11 +18,13 @@ This automation helps keep the Bitwig Studio package in winget-pkgs up to date b
 ## 🚀 Quick Start
 
 1. **Run the setup script:**
+
    ```powershell
    .\Tools\Setup-BitwigAutomation.ps1
    ```
 
 2. **Commit the automation files:**
+
    ```bash
    git add .github/workflows/bitwig-auto-update.yml Tools/Update-BitwigManifest.ps1
    git commit -m "Add Bitwig Studio automation"
@@ -57,7 +59,7 @@ The workflow runs daily at 10:00 AM UTC. You can modify this in `.github/workflo
 
 ```yaml
 schedule:
-  - cron: '0 10 * * *'  # Change this line
+  - cron: "0 10 * * *" # Change this line
 ```
 
 ### Manual Trigger
@@ -81,6 +83,7 @@ You can trigger the workflow manually from the GitHub Actions tab in your reposi
 ### URL Pattern
 
 Bitwig uses a predictable URL pattern for downloads:
+
 ```
 https://www.bitwig.com/dl/Bitwig%20Studio/{VERSION}/installer_windows/
 ```
@@ -98,6 +101,7 @@ The automation detects the latest version from their main download page and cons
 ### Notifications
 
 The workflow will:
+
 - ✅ Create a PR when a new version is found
 - ℹ️ Do nothing when no new version is available
 - ❌ Fail and log errors if something goes wrong
@@ -107,11 +111,13 @@ The workflow will:
 ### Common Issues
 
 1. **Workflow not running**
+
    - Check if GitHub Actions is enabled in repository settings
    - Verify the workflow file is in `.github/workflows/`
    - Ensure you've pushed the changes to your repository
 
 2. **Download failures**
+
    - Bitwig may have changed their URL structure
    - Check if the installer URL is accessible
    - Review the error logs in GitHub Actions

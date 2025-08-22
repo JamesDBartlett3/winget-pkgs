@@ -5,8 +5,9 @@ This document explains how to manage a winget-pkgs fork with automation tools wh
 ## 🎯 **The Problem**
 
 When you add automation tools to your winget-pkgs fork:
+
 - ❌ GitHub Actions workflows get included in upstream PRs
-- ❌ Custom scripts pollute the Microsoft repository  
+- ❌ Custom scripts pollute the Microsoft repository
 - ❌ Automation files cause merge conflicts
 - ❌ Your PRs get rejected for containing unwanted files
 
@@ -17,7 +18,7 @@ We use a **three-branch strategy** to keep automation isolated:
 ```
 📦 Your Fork Repository
 ├── 🌟 master branch          (Clean, syncs with upstream)
-├── 🤖 automation branch      (Contains your automation tools) 
+├── 🤖 automation branch      (Contains your automation tools)
 └── 📋 package-* branches     (Clean branches for individual PRs)
 ```
 
@@ -31,6 +32,7 @@ We use a **three-branch strategy** to keep automation isolated:
 ```
 
 This will:
+
 - ✅ Create clean `master` branch synced with upstream
 - ✅ Keep automation files isolated in `automation` branch
 - ✅ Set up proper remote tracking
@@ -38,17 +40,18 @@ This will:
 ### **2. Configure GitHub Actions**
 
 The automation workflow is configured to:
+
 - ✅ Only run on `automation` branch
-- ✅ Create PRs targeting `automation` branch  
+- ✅ Create PRs targeting `automation` branch
 - ✅ Never interfere with clean upstream PRs
 
 ```yaml
 on:
   schedule:
-    - cron: '0 10 * * *'  # Daily checks
+    - cron: "0 10 * * *" # Daily checks
   push:
     branches:
-      - automation  # Only runs on automation branch
+      - automation # Only runs on automation branch
 ```
 
 ## 📋 **Daily Workflow**
@@ -95,6 +98,7 @@ Regularly sync your branches with upstream:
 ```
 
 This will:
+
 - ✅ Fetch latest changes from Microsoft's repo
 - ✅ Update your clean `master` branch
 - ✅ Merge upstream changes into `automation` branch
@@ -103,18 +107,21 @@ This will:
 ## 📊 **Branch Structure Explained**
 
 ### **🌟 Master Branch**
+
 - **Purpose**: Clean sync with upstream Microsoft repo
 - **Contains**: Only official winget-pkgs content
 - **Never contains**: Automation files, custom scripts, GitHub Actions
 - **Used for**: Creating clean PR branches
 
-### **🤖 Automation Branch**  
+### **🤖 Automation Branch**
+
 - **Purpose**: Contains your automation tools
 - **Contains**: GitHub Actions, PowerShell scripts, automation manifests
 - **Never used for**: Upstream PRs
 - **Used for**: Running automation, managing your tools
 
 ### **📋 Package Branches (e.g., bitwig.bitwig-5.3.14)**
+
 - **Purpose**: Clean branches for individual upstream PRs
 - **Contains**: Only the specific package manifests for one version
 - **Created from**: Clean `master` branch
@@ -142,12 +149,14 @@ ls Tools/Update-Bitwig*      # Should exist
 ## 🚨 **Important Reminders**
 
 ### **DO ✅**
+
 - Keep automation files only in `automation` branch
-- Create PR branches from clean `master` 
+- Create PR branches from clean `master`
 - Sync regularly with upstream
 - Use the management script for consistency
 
 ### **DON'T ❌**
+
 - Add automation files to `master` branch
 - Create PRs directly from `automation` branch
 - Mix automation files with package manifests in PR branches
@@ -176,11 +185,12 @@ ls manifests/b/bitwig/bitwig/5.3.14/
 ✅ **Automated maintenance** - Daily version checks continue working  
 ✅ **Easy management** - Scripts handle the complexity  
 ✅ **Sync safety** - No merge conflicts with upstream  
-✅ **Professional workflow** - Follows Git best practices  
+✅ **Professional workflow** - Follows Git best practices
 
 ## 🆘 **Troubleshooting**
 
 ### Problem: Automation files appear in PR
+
 ```powershell
 # Fix: Recreate branch from clean master
 git checkout master
@@ -189,6 +199,7 @@ git branch -D problematic-branch
 ```
 
 ### Problem: GitHub Actions not running
+
 ```powershell
 # Check you're on automation branch
 git checkout automation
@@ -196,6 +207,7 @@ git push origin automation  # Trigger workflow
 ```
 
 ### Problem: Merge conflicts during sync
+
 ```powershell
 # Reset automation branch and reapply changes
 git checkout automation
