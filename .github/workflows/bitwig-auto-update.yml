@@ -6,6 +6,12 @@ on:
     - cron: '0 10 * * *'
   workflow_dispatch:
     # Allow manual triggering
+  push:
+    branches:
+      - automation  # Only run on automation branch
+    paths:
+      - '.github/workflows/bitwig-auto-update.yml'
+      - 'Tools/Update-BitwigManifest.ps1'
 
 env:
   PACKAGE_IDENTIFIER: "bitwig.bitwig"
@@ -254,7 +260,7 @@ jobs:
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ env.BRANCH_NAME }}
+          base: automation
           title: "Add Bitwig Studio ${{ needs.check-new-version.outputs.new-version }}"
           body: |
             ## New Package Version
