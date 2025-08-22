@@ -1,0 +1,300 @@
+name: Auto-update Bitwig Studio
+
+on:
+  schedule:
+    # Run every day at 10:00 AM UTC (check for new releases)
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+    # Allow manual triggering
+
+env:
+  PACKAGE_IDENTIFIER: "bitwig.bitwig"
+  PUBLISHER: "Bitwig GmbH"
+  PACKAGE_NAME: "Bitwig Studio"
+
+jobs:
+  check-new-version:
+    runs-on: windows-latest
+    outputs:
+      new-version: ${{ steps.version-check.outputs.new-version }}
+      current-version: ${{ steps.version-check.outputs.current-version }}
+      needs-update: ${{ steps.version-check.outputs.needs-update }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for new Bitwig version
+        id: version-check
+        shell: pwsh
+        run: |
+          # Get the latest version from Bitwig download page
+          try {
+            $downloadPage = Invoke-WebRequest -Uri "https://www.bitwig.com/download/" -UseBasicParsing
+            $versionPattern = 'Bitwig Studio ([\d\.]+)'
+            $versionMatch = [regex]::Match($downloadPage.Content, $versionPattern)
+            
+            if ($versionMatch.Success) {
+              $latestVersion = $versionMatch.Groups[1].Value
+              Write-Host "Latest Bitwig version found: $latestVersion"
+              
+              # Check if this version already exists in manifests
+              $manifestPath = "manifests\b\bitwig\bitwig\$latestVersion"
+              $manifestExists = Test-Path $manifestPath
+              
+              if (-not $manifestExists) {
+                Write-Host "New version detected: $latestVersion"
+                echo "new-version=$latestVersion" >> $env:GITHUB_OUTPUT
+                echo "needs-update=true" >> $env:GITHUB_OUTPUT
+                
+                # Get current latest version for comparison
+                $existingVersions = Get-ChildItem "manifests\b\bitwig\bitwig\" -Directory | ForEach-Object { [version]$_.Name } | Sort-Object -Descending
+                $currentLatest = $existingVersions[0].ToString()
+                echo "current-version=$currentLatest" >> $env:GITHUB_OUTPUT
+              } else {
+                Write-Host "Version $latestVersion already exists"
+                echo "needs-update=false" >> $env:GITHUB_OUTPUT
+              }
+            } else {
+              Write-Host "Could not parse version from download page"
+              echo "needs-update=false" >> $env:GITHUB_OUTPUT
+            }
+          } catch {
+            Write-Host "Error checking for new version: $_"
+            echo "needs-update=false" >> $env:GITHUB_OUTPUT
+          }
+
+  create-manifest:
+    needs: check-new-version
+    if: needs.check-new-version.outputs.needs-update == 'true'
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create new branch
+        run: |
+          $newVersion = "${{ needs.check-new-version.outputs.new-version }}"
+          $branchName = "bitwig-studio-$newVersion"
+          git checkout -b $branchName
+          echo "BRANCH_NAME=$branchName" >> $env:GITHUB_ENV
+
+      - name: Download installer and calculate checksum
+        id: download
+        shell: pwsh
+        run: |
+          $version = "${{ needs.check-new-version.outputs.new-version }}"
+          $installerUrl = "https://www.bitwig.com/dl/Bitwig%20Studio/$version/installer_windows/"
+          
+          Write-Host "Downloading installer from: $installerUrl"
+          
+          # Create temp directory
+          $tempDir = New-Item -ItemType Directory -Path "temp_download" -Force
+          $installerPath = Join-Path $tempDir "bitwig_installer.msi"
+          
+          try {
+            # Download the installer
+            Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
+            
+            # Calculate SHA256 checksum
+            $hash = Get-FileHash -Path $installerPath -Algorithm SHA256
+            $checksum = $hash.Hash
+            
+            Write-Host "Downloaded installer successfully"
+            Write-Host "SHA256: $checksum"
+            
+            echo "checksum=$checksum" >> $env:GITHUB_OUTPUT
+            echo "installer-url=$installerUrl" >> $env:GITHUB_OUTPUT
+            
+            # Clean up
+            Remove-Item $tempDir -Recurse -Force
+          } catch {
+            Write-Host "Error downloading installer: $_"
+            exit 1
+          }
+
+      - name: Create manifest files
+        shell: pwsh
+        run: |
+          $version = "${{ needs.check-new-version.outputs.new-version }}"
+          $checksum = "${{ steps.download.outputs.checksum }}"
+          $installerUrl = "${{ steps.download.outputs.installer-url }}"
+          $currentYear = (Get-Date).Year
+          
+          # Create manifest directory
+          $manifestDir = "manifests\b\bitwig\bitwig\$version"
+          New-Item -ItemType Directory -Path $manifestDir -Force
+          
+          # Create version manifest
+          $versionManifest = @"
+          # Created with automated workflow
+          # yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json
+          
+          PackageIdentifier: bitwig.bitwig
+          PackageVersion: $version
+          DefaultLocale: en-US
+          ManifestType: version
+          ManifestVersion: 1.10.0
+          "@
+          
+          # Create installer manifest
+          $installerManifest = @"
+          # Created with automated workflow
+          # yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+          
+          PackageIdentifier: bitwig.bitwig
+          PackageVersion: $version
+          Platform:
+          - Windows.Desktop
+          MinimumOSVersion: 10.0.0.0
+          InstallerType: wix
+          Scope: machine
+          InstallModes:
+          - interactive
+          - silent
+          - silentWithProgress
+          UpgradeBehavior: uninstallPrevious
+          FileExtensions:
+          - bwproject
+          - bwtemplate
+          Installers:
+          - Architecture: x64
+            InstallerUrl: $installerUrl
+            InstallerSha256: $checksum
+          ManifestType: installer
+          ManifestVersion: 1.10.0
+          "@
+          
+          # Create locale manifest
+          $localeManifest = @"
+          # Created with automated workflow
+          # yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+          
+          PackageIdentifier: bitwig.bitwig
+          PackageVersion: $version
+          PackageLocale: en-US
+          Publisher: Bitwig GmbH
+          PublisherUrl: https://www.bitwig.com/
+          PublisherSupportUrl: https://www.bitwig.com/support/
+          PrivacyUrl: https://www.bitwig.com/privacy_policy/
+          Author: Bitwig GmbH
+          PackageName: Bitwig Studio
+          PackageUrl: https://www.bitwig.com/
+          License: Proprietary
+          LicenseUrl: https://shop.bitwig.com/order/terms_conditions.php
+          Copyright: Copyright (c) $currentYear Bitwig GmbH
+          CopyrightUrl: https://www.bitwig.com/copyright/
+          ShortDescription: Modern music production and performance for Windows, macOS, and Linux.
+          Moniker: bitwig
+          Tags:
+          - daw
+          - midi
+          - music
+          - vst
+          - vsti
+          ReleaseNotesUrl: https://www.bitwig.com/dl/Bitwig%20Studio/$version/release_notes/
+          ManifestType: defaultLocale
+          ManifestVersion: 1.10.0
+          "@
+          
+          # Write manifest files
+          $versionManifest | Out-File -FilePath "$manifestDir\bitwig.bitwig.yaml" -Encoding UTF8
+          $installerManifest | Out-File -FilePath "$manifestDir\bitwig.bitwig.installer.yaml" -Encoding UTF8
+          $localeManifest | Out-File -FilePath "$manifestDir\bitwig.bitwig.locale.en-US.yaml" -Encoding UTF8
+          
+          Write-Host "Created manifest files for version $version"
+
+      - name: Validate manifests
+        shell: pwsh
+        run: |
+          $version = "${{ needs.check-new-version.outputs.new-version }}"
+          $manifestDir = "manifests\b\bitwig\bitwig\$version"
+          
+          # Basic validation - check if files exist and have content
+          $files = @(
+            "bitwig.bitwig.yaml",
+            "bitwig.bitwig.installer.yaml", 
+            "bitwig.bitwig.locale.en-US.yaml"
+          )
+          
+          foreach ($file in $files) {
+            $filePath = Join-Path $manifestDir $file
+            if (-not (Test-Path $filePath)) {
+              Write-Host "Error: $file not found"
+              exit 1
+            }
+            
+            $content = Get-Content $filePath -Raw
+            if ([string]::IsNullOrWhiteSpace($content)) {
+              Write-Host "Error: $file is empty"
+              exit 1
+            }
+          }
+          
+          Write-Host "All manifest files validated successfully"
+
+      - name: Commit and push changes
+        run: |
+          $version = "${{ needs.check-new-version.outputs.new-version }}"
+          git add .
+          git commit -m "Add Bitwig Studio $version"
+          git push origin $env:BRANCH_NAME
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ env.BRANCH_NAME }}
+          title: "Add Bitwig Studio ${{ needs.check-new-version.outputs.new-version }}"
+          body: |
+            ## New Package Version
+            
+            **Package**: Bitwig Studio  
+            **Version**: ${{ needs.check-new-version.outputs.new-version }}  
+            **Previous Version**: ${{ needs.check-new-version.outputs.current-version }}
+            
+            ### Changes
+            - ✅ Downloaded and verified installer
+            - ✅ Calculated SHA256 checksum
+            - ✅ Created manifest files
+            - ✅ Validated manifest structure
+            
+            ### Installer Details
+            - **URL**: ${{ steps.download.outputs.installer-url }}
+            - **SHA256**: ${{ steps.download.outputs.checksum }}
+            
+            ### Automation
+            This PR was created automatically by the Bitwig Studio auto-update workflow.
+            
+            ---
+            **Note**: Please review the manifest files and test the installation before merging.
+          draft: false
+          delete-branch: true
+
+  notify:
+    needs: [check-new-version, create-manifest]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Notify result
+        run: |
+          if [ "${{ needs.check-new-version.outputs.needs-update }}" == "true" ]; then
+            if [ "${{ needs.create-manifest.result }}" == "success" ]; then
+              echo "✅ Successfully created PR for Bitwig Studio ${{ needs.check-new-version.outputs.new-version }}"
+            else
+              echo "❌ Failed to create manifest for Bitwig Studio ${{ needs.check-new-version.outputs.new-version }}"
+            fi
+          else
+            echo "ℹ️ No new Bitwig Studio version found"
+          fi
