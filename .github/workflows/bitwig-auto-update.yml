@@ -293,11 +293,180 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Notify result
+      - name: Send Email Notification
+        if: needs.check-new-version.outputs.needs-update == 'true' && needs.create-manifest.result == 'success'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "🎉 New Bitwig Studio ${{ needs.check-new-version.outputs.new-version }} Ready for Submission"
+          to: ${{ secrets.EMAIL_TO }}
+          from: "Bitwig Automation <${{ secrets.EMAIL_USERNAME }}>"
+          html_body: |
+            <h2>🎵 New Bitwig Studio Version Ready!</h2>
+            
+            <p><strong>Version:</strong> ${{ needs.check-new-version.outputs.new-version }}</p>
+            <p><strong>Previous Version:</strong> ${{ needs.check-new-version.outputs.current-version }}</p>
+            
+            <h3>✅ What's Ready:</h3>
+            <ul>
+              <li>✅ Installer downloaded and verified</li>
+              <li>✅ SHA256 checksum calculated</li>
+              <li>✅ Complete manifest files created</li>
+              <li>✅ Pull request created in your fork</li>
+            </ul>
+            
+            <h3>🚀 Next Steps:</h3>
+            <ol>
+              <li><strong>Review the PR:</strong> <a href="https://github.com/${{ github.repository }}/pulls">View Pull Requests</a></li>
+              <li><strong>Test the installation locally</strong> (optional)</li>
+              <li><strong>Create upstream PR:</strong> Use the workflow management script</li>
+            </ol>
+            
+            <h3>📋 Quick Commands:</h3>
+            <pre>
+            # Review and merge automation PR
+            git checkout automation
+            git pull origin automation
+            
+            # Create clean upstream PR
+            .\Tools\Manage-ForkWorkflow.ps1 -Action create-pr
+            # Enter: bitwig.bitwig
+            # Enter: ${{ needs.check-new-version.outputs.new-version }}
+            
+            # Copy manifests from automation branch
+            git checkout automation
+            cp -r "manifests/b/bitwig/bitwig/${{ needs.check-new-version.outputs.new-version }}" /tmp/
+            git checkout bitwig.bitwig-${{ needs.check-new-version.outputs.new-version }}
+            cp -r "/tmp/${{ needs.check-new-version.outputs.new-version }}" "manifests/b/bitwig/bitwig/"
+            git add manifests/
+            git commit -m "Add Bitwig Studio ${{ needs.check-new-version.outputs.new-version }}"
+            git push -u origin bitwig.bitwig-${{ needs.check-new-version.outputs.new-version }}
+            </pre>
+            
+            <p><strong>PR Links:</strong></p>
+            <ul>
+              <li><a href="https://github.com/${{ github.repository }}/pulls">Your Fork PRs</a></li>
+              <li><a href="https://github.com/microsoft/winget-pkgs/compare/master...${{ github.repository_owner }}:winget-pkgs:bitwig.bitwig-${{ needs.check-new-version.outputs.new-version }}">Create Upstream PR</a> (after pushing branch)</li>
+            </ul>
+            
+            <hr>
+            <p><small>This notification was sent by your Bitwig Studio automation. The manifest is ready for your review and submission!</small></p>
+
+      - name: Create GitHub Issue Notification
+        if: needs.check-new-version.outputs.needs-update == 'true' && needs.create-manifest.result == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ needs.check-new-version.outputs.new-version }}';
+            const previousVersion = '${{ needs.check-new-version.outputs.current-version }}';
+            
+            const issueBody = `## 🎵 New Bitwig Studio Version Ready for Submission
+            
+            **Version:** ${version}  
+            **Previous Version:** ${previousVersion}
+            
+            ### ✅ Automation Completed:
+            - [x] Downloaded installer from official Bitwig website
+            - [x] Calculated SHA256 checksum
+            - [x] Created complete manifest files
+            - [x] Validated manifest structure
+            - [x] Created pull request in this repository
+            
+            ### 🚀 Your Action Required:
+            
+            1. **Review the automated PR** in this repository
+            2. **Test locally** (optional): \`winget install bitwig.bitwig --version ${version}\`
+            3. **Create upstream PR** using the workflow management script
+            
+            ### 📋 Quick Commands:
+            
+            \`\`\`powershell
+            # Create clean upstream PR
+            .\\Tools\\Manage-ForkWorkflow.ps1 -Action create-pr
+            # Enter package: bitwig.bitwig
+            # Enter version: ${version}
+            
+            # Copy manifests and submit
+            git checkout automation
+            cp -r "manifests/b/bitwig/bitwig/${version}" /tmp/
+            git checkout bitwig.bitwig-${version}
+            cp -r "/tmp/${version}" "manifests/b/bitwig/bitwig/"
+            git add manifests/
+            git commit -m "Add Bitwig Studio ${version}"
+            git push -u origin bitwig.bitwig-${version}
+            \`\`\`
+            
+            ### 🔗 Links:
+            - [View Automation PR](https://github.com/${{ github.repository }}/pulls)
+            - [Create Upstream PR](https://github.com/microsoft/winget-pkgs/compare/master...${{ github.repository_owner }}:winget-pkgs:bitwig.bitwig-${version}) (after pushing branch)
+            
+            ---
+            **This issue was created automatically by the Bitwig Studio automation.**
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🎵 Bitwig Studio ${version} Ready for Submission`,
+              body: issueBody,
+              labels: ['automation', 'bitwig-studio', 'ready-for-submission']
+            });
+
+      - name: Send Discord Notification
+        if: needs.check-new-version.outputs.needs-update == 'true' && needs.create-manifest.result == 'success'
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            curl -H "Content-Type: application/json" \
+                 -X POST \
+                 -d '{
+                   "embeds": [{
+                     "title": "🎵 New Bitwig Studio Release Ready!",
+                     "description": "Version ${{ needs.check-new-version.outputs.new-version }} is ready for submission to winget-pkgs",
+                     "color": 3066993,
+                     "fields": [
+                       {
+                         "name": "Version",
+                         "value": "${{ needs.check-new-version.outputs.new-version }}",
+                         "inline": true
+                       },
+                       {
+                         "name": "Previous Version", 
+                         "value": "${{ needs.check-new-version.outputs.current-version }}",
+                         "inline": true
+                       },
+                       {
+                         "name": "Status",
+                         "value": "✅ Manifests created and ready for review",
+                         "inline": false
+                       },
+                       {
+                         "name": "Next Steps",
+                         "value": "1. Review PR in your fork\n2. Create upstream PR\n3. Submit to Microsoft",
+                         "inline": false
+                       }
+                     ],
+                     "footer": {
+                       "text": "Bitwig Studio Automation"
+                     },
+                     "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
+                   }]
+                 }' \
+                 "$DISCORD_WEBHOOK"
+          fi
+
+      - name: Console Notification
         run: |
           if [ "${{ needs.check-new-version.outputs.needs-update }}" == "true" ]; then
             if [ "${{ needs.create-manifest.result }}" == "success" ]; then
-              echo "✅ Successfully created PR for Bitwig Studio ${{ needs.check-new-version.outputs.new-version }}"
+              echo "✅ Successfully created manifests for Bitwig Studio ${{ needs.check-new-version.outputs.new-version }}"
+              echo "📧 Notifications sent (if configured)"
+              echo "🔗 Check your repository for the new PR: https://github.com/${{ github.repository }}/pulls"
+              echo "⏭️ Ready for manual submission to Microsoft's winget-pkgs"
             else
               echo "❌ Failed to create manifest for Bitwig Studio ${{ needs.check-new-version.outputs.new-version }}"
             fi
