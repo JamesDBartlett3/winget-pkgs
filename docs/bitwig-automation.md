@@ -1,17 +1,18 @@
 # Bitwig Studio Automation for winget-pkgs
 
-This automation helps keep the Bitwig Studio package in winget-pkgs up to date by automatically checking for new releases and creating pull requests with updated manifests.
+This automation keeps the Bitwig Studio package in a fork up to date by checking for new releases, generating a current manifest set, validating it, and opening a review PR in the fork.
 
 ## 🤖 What it does
 
 - **Monitors**: Checks Bitwig's download page daily for new releases
-- **Downloads**: Automatically downloads new installers and calculates checksums
-- **Creates**: Generates complete winget manifest files
-- **Submits**: Opens pull requests with the new package version
+- **Downloads**: Retrieves the available Windows installers and calculates checksums
+- **Generates**: Creates the three required winget manifest files in the current repository format
+- **Validates**: Runs `winget validate` before opening a PR
+- **Submits**: Opens a review PR in your fork
 
 ## 📁 Files
 
-- **`.github/workflows/bitwig-auto-update.yml`** - GitHub Actions workflow for automation
+- **`.github/workflows/bitwig-auto-update.yml`** - GitHub Actions workflow for fork automation
 - **`Tools/Update-BitwigManifest.ps1`** - Standalone PowerShell script for manual updates
 - **`Tools/Setup-BitwigAutomation.ps1`** - Setup helper script
 
@@ -26,19 +27,24 @@ This automation helps keep the Bitwig Studio package in winget-pkgs up to date b
 2. **Commit the automation files:**
 
    ```bash
-   git add .github/workflows/bitwig-auto-update.yml Tools/Update-BitwigManifest.ps1
+   git add .github/workflows/bitwig-auto-update.yml Tools/Update-BitwigManifest.ps1 Tools/Setup-BitwigAutomation.ps1
    git commit -m "Add Bitwig Studio automation"
    git push
    ```
 
-3. **Enable GitHub Actions** in your repository settings if not already enabled.
+3. **Choose the branch model you want:**
+
+   - **Simplest**: keep the workflow on your fork's default branch.
+   - **Isolated**: keep the workflow on an `automation` branch and make that branch the fork's default branch so scheduled runs stay active.
+
+4. **Enable GitHub Actions** in your fork if not already enabled.
 
 ## 🔧 Manual Usage
 
 You can also run the update script manually:
 
 ```powershell
-# Check for latest version and create manifests
+# Check for the latest version and create manifests
 .\Tools\Update-BitwigManifest.ps1
 
 # Create manifests for a specific version
@@ -47,139 +53,65 @@ You can also run the update script manually:
 # Force overwrite existing manifests
 .\Tools\Update-BitwigManifest.ps1 -Force
 
-# Test without downloading (useful for development)
+# Dry run without downloading installers
 .\Tools\Update-BitwigManifest.ps1 -SkipDownload
 ```
 
-## ⚙️ Configuration
-
-### GitHub Actions Schedule
-
-The workflow runs daily at 10:00 AM UTC. You can modify this in `.github/workflows/bitwig-auto-update.yml`:
-
-```yaml
-schedule:
-  - cron: "0 10 * * *" # Change this line
-```
-
-### Manual Trigger
-
-You can trigger the workflow manually from the GitHub Actions tab in your repository.
-
-## 📋 How it works
+## ⚙️ How it works
 
 ### Automatic Process (GitHub Actions)
 
 1. **Version Check**: Scrapes Bitwig's download page for the latest version
-2. **Validation**: Checks if the version already exists in manifests
-3. **Download**: Downloads the Windows installer from Bitwig's CDN
-4. **Checksum**: Calculates SHA256 hash of the installer
-5. **Manifest Creation**: Generates all three required YAML files:
-   - `bitwig.bitwig.yaml` (version manifest)
-   - `bitwig.bitwig.installer.yaml` (installer manifest)
-   - `bitwig.bitwig.locale.en-US.yaml` (locale manifest)
-6. **Pull Request**: Creates a new branch and opens a PR with the changes
+2. **Comparison**: Checks whether that version already exists in `manifests/b/bitwig/bitwig/`
+3. **Download**: Downloads the available Windows installers from Bitwig
+4. **Metadata**: Calculates SHA256 hashes and reads MSI ProductCodes when they are available
+5. **Manifest Creation**: Generates all three required YAML files
+6. **Validation**: Runs `winget validate --manifest <folder>`
+7. **Pull Request**: Opens a review PR in your fork
 
 ### URL Pattern
 
-Bitwig uses a predictable URL pattern for downloads:
+Bitwig uses predictable download URLs:
 
-```
+```text
 https://www.bitwig.com/dl/Bitwig%20Studio/{VERSION}/installer_windows/
+https://www.bitwig.com/dl/Bitwig%20Studio/{VERSION}/installer_windowsarm/
 ```
 
-The automation detects the latest version from their main download page and constructs the appropriate URL.
+The automation tries the x64 installer first and adds the arm64 installer when Bitwig publishes it.
 
 ## 🔍 Monitoring
 
-### GitHub Actions
-
-- Check the "Actions" tab in your GitHub repository
-- The workflow is named "Auto-update Bitwig Studio"
-- Failed runs will show error details
-
-### Notifications
-
-The workflow will:
-
-- ✅ Create a PR when a new version is found
-- ℹ️ Do nothing when no new version is available
-- ❌ Fail and log errors if something goes wrong
+- Check the **Actions** tab in your fork
+- The workflow is named **Auto-update Bitwig Studio**
+- Failed runs will show download, generation, or validation errors directly in the logs
 
 ## 🛠️ Troubleshooting
 
-### Common Issues
+### Workflow not running
 
-1. **Workflow not running**
+- Check that GitHub Actions is enabled in your fork
+- Confirm the workflow file is on the fork's default branch
+- If you isolate the workflow on `automation`, make sure `automation` is the fork's default branch
 
-   - Check if GitHub Actions is enabled in repository settings
-   - Verify the workflow file is in `.github/workflows/`
-   - Ensure you've pushed the changes to your repository
+### Validation failures
 
-2. **Download failures**
+- Review the workflow logs for the `winget validate` output
+- Run the script locally on Windows to reproduce the failure
+- Compare the generated manifests with the latest committed Bitwig manifest folder
 
-   - Bitwig may have changed their URL structure
-   - Check if the installer URL is accessible
-   - Review the error logs in GitHub Actions
+### Download failures
 
-3. **Checksum mismatches**
-   - The installer might have been updated after release
-   - Try running the script again
-   - Manually verify the installer integrity
+- Bitwig may have changed its URL layout
+- Review the workflow logs to see which installer URL failed
+- Retry manually with `.\Tools\Update-BitwigManifest.ps1 -Version <version>`
 
-### Debug Mode
+## 📤 Upstream submission
 
-Run the manual script with verbose output:
+This workflow intentionally stops after creating a review PR in your fork. Once you are satisfied with the generated manifests, copy the single version folder into a clean contribution branch and submit that branch to `microsoft/winget-pkgs`.
 
-```powershell
-$VerbosePreference = "Continue"
-.\Tools\Update-BitwigManifest.ps1 -Verbose
-```
+## 📝 Notes
 
-## 🔒 Security
-
-- The automation only reads from Bitwig's official website
-- It doesn't execute downloaded installers, only calculates checksums
-- All network requests use HTTPS
-- No sensitive data is stored or transmitted
-
-## 🤝 Contributing
-
-If you find issues with the automation:
-
-1. Check the error logs in GitHub Actions
-2. Test the manual script locally
-3. Open an issue with relevant error messages
-4. Submit a PR with fixes if you identify the problem
-
-## 📝 Customization
-
-### For Other Packages
-
-You can adapt this automation for other software packages by:
-
-1. Modifying the version detection logic in the scripts
-2. Updating the URL patterns for downloads
-3. Adjusting the manifest templates
-4. Changing the package identifier and metadata
-
-### Extended Monitoring
-
-You can extend the automation to:
-
-- Check multiple software packages
-- Send notifications to Slack/Discord
-- Integrate with package testing
-- Add more sophisticated version comparison
-
-## 🏷️ Version History
-
-- **v1.0** - Initial automation for Bitwig Studio
-- Supports automatic version detection
-- Creates complete winget manifests
-- GitHub Actions integration
-- Manual script execution
-
----
-
-**Note**: This automation is community-maintained and not officially supported by Bitwig GmbH or Microsoft.
+- The automation is designed for a fork, not for direct submission to the upstream repository.
+- `-SkipDownload` is only for dry runs; it does not produce submission-ready manifests.
+- The workflow validates generated manifests before opening a PR.

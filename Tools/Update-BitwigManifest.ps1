@@ -1,177 +1,254 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Automated Bitwig Studio manifest updater for winget-pkgs
+    Automated Bitwig Studio manifest updater for winget-pkgs.
 
 .DESCRIPTION
-    This script automatically checks for new Bitwig Studio releases,
-    downloads the installer, calculates checksums, and creates winget manifest files.
-    
+    Checks for new Bitwig Studio releases, downloads the available Windows installers,
+    computes their SHA256 hashes, generates a current-style winget manifest set, and
+    validates it with winget.
+
 .PARAMETER Force
-    Force update even if the version already exists
+    Force regeneration even if the version already exists.
 
 .PARAMETER SkipDownload
-    Skip downloading the installer (useful for testing manifest generation)
+    Skip downloading installers. This is intended for local dry runs only and does not
+    produce submission-ready manifests.
 
 .PARAMETER Version
-    Specify a specific version to create manifests for
+    Create manifests for a specific version instead of discovering the latest release.
 
-.EXAMPLE
-    .\Update-BitwigManifest.ps1
-    Check for latest version and create manifests if new version found
-
-.EXAMPLE
-    .\Update-BitwigManifest.ps1 -Version "5.3.14" -Force
-    Create manifests for specific version, overwriting if exists
-
-.NOTES
-    Author: Auto-generated for winget-pkgs automation
+.PARAMETER OutputPath
+    Optional GitHub Actions output file path. When provided, the script writes the
+    current version, new version, manifest directory, and update decision to it.
 #>
 
 [CmdletBinding()]
 param(
     [switch]$Force,
     [switch]$SkipDownload,
-    [string]$Version
+    [string]$Version,
+    [string]$OutputPath
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = 'Stop'
 
-# Configuration
-$PackageIdentifier = "bitwig.bitwig"
-$PublisherName = "Bitwig GmbH"
-$PackageName = "Bitwig Studio"
-$BaseUrl = "https://www.bitwig.com"
+$PackageIdentifier = 'bitwig.bitwig'
+$PublisherName = 'Bitwig GmbH'
+$PackageName = 'Bitwig Studio'
+$BaseUrl = 'https://www.bitwig.com'
+$ManifestSchemaVersion = '1.12.0'
+$RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$ManifestRoot = Join-Path $RepositoryRoot 'manifests\b\bitwig\bitwig'
 
 function Write-ColorText {
     param(
+        [Parameter(Mandatory = $true)]
         [string]$Text,
-        [string]$Color = "White"
+
+        [string]$Color = 'White'
     )
+
     Write-Host $Text -ForegroundColor $Color
 }
 
-function Get-LatestBitwigVersion {
-    Write-ColorText "Checking for latest Bitwig Studio version..." "Yellow"
-    
-    try {
-        $downloadPage = Invoke-WebRequest -Uri "$BaseUrl/download/" -UseBasicParsing
-        $versionPattern = 'Bitwig Studio ([\d\.]+)'
-        $versionMatch = [regex]::Match($downloadPage.Content, $versionPattern)
-        
-        if ($versionMatch.Success) {
-            $latestVersion = $versionMatch.Groups[1].Value
-            Write-ColorText "Latest version found: $latestVersion" "Green"
-            return $latestVersion
-        } else {
-            throw "Could not parse version from download page"
-        }
-    } catch {
-        Write-ColorText "Error checking for latest version: $_" "Red"
-        throw
+function Set-ActionOutput {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [AllowEmptyString()]
+        [string]$Value
+    )
+
+    if (-not $OutputPath) {
+        return
     }
+
+    Add-Content -Path $OutputPath -Value ("{0}={1}" -f $Name, $Value)
+}
+
+function Get-ExistingVersions {
+    Get-ChildItem -Path $ManifestRoot -Directory |
+        Sort-Object -Property { [version]$_.Name } -Descending
+}
+
+function Get-CurrentVersion {
+    $currentVersion = Get-ExistingVersions | Select-Object -First 1 -ExpandProperty Name
+    if (-not $currentVersion) {
+        throw 'No existing Bitwig manifest versions were found.'
+    }
+
+    return $currentVersion
+}
+
+function Get-LatestBitwigVersion {
+    Write-ColorText 'Checking for the latest Bitwig Studio version...' 'Yellow'
+
+    $downloadPage = Invoke-WebRequest -Uri "$BaseUrl/download/" -UseBasicParsing
+    $versionMatch = [regex]::Match($downloadPage.Content, 'Bitwig Studio ([\d\.]+)')
+
+    if (-not $versionMatch.Success) {
+        throw 'Could not parse a Bitwig Studio version from the download page.'
+    }
+
+    $latestVersion = $versionMatch.Groups[1].Value
+    Write-ColorText "Latest version found: $latestVersion" 'Green'
+    return $latestVersion
 }
 
 function Test-VersionExists {
-    param([string]$Version)
-    
-    $manifestPath = "manifests\b\bitwig\bitwig\$Version"
-    return Test-Path $manifestPath
+    param([Parameter(Mandatory = $true)][string]$TargetVersion)
+
+    return Test-Path (Join-Path $ManifestRoot $TargetVersion)
+}
+
+function Get-MsiProductCode {
+    param([Parameter(Mandatory = $true)][string]$InstallerPath)
+
+    $windowsInstaller = $null
+    $database = $null
+    $view = $null
+    $record = $null
+
+    try {
+        $windowsInstaller = New-Object -ComObject WindowsInstaller.Installer
+        $database = $windowsInstaller.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $windowsInstaller, @($InstallerPath, 0))
+        $view = $database.GetType().InvokeMember('OpenView', 'InvokeMethod', $null, $database, ("SELECT `Value` FROM `Property` WHERE `Property` = 'ProductCode'"))
+        $null = $view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null)
+        $record = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null)
+
+        if ($null -eq $record) {
+            return $null
+        }
+
+        return $record.GetType().InvokeMember('StringData', 'GetProperty', $null, $record, 1)
+    } catch {
+        Write-ColorText "Warning: unable to read ProductCode from $InstallerPath. $_" 'Yellow'
+        return $null
+    } finally {
+        foreach ($object in @($record, $view, $database, $windowsInstaller)) {
+            if ($null -ne $object -and [System.Runtime.InteropServices.Marshal]::IsComObject($object)) {
+                [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($object)
+            }
+        }
+
+        [gc]::Collect()
+        [gc]::WaitForPendingFinalizers()
+    }
 }
 
 function Get-InstallerInfo {
-    param([string]$Version)
-    
+    param([Parameter(Mandatory = $true)][string]$TargetVersion)
+
     if ($SkipDownload) {
-        Write-ColorText "Skipping download as requested" "Yellow"
-        return @{
-            Url = "https://www.bitwig.com/dl/Bitwig%20Studio/$Version/installer_windows/"
-            Checksum = "PLACEHOLDER_CHECKSUM_REPLACE_MANUALLY"
-        }
+        Write-ColorText 'Skipping downloads; generated manifests will not be submission-ready.' 'Yellow'
+        return @(
+            [pscustomobject]@{
+                Architecture = 'x64'
+                Url = "$BaseUrl/dl/Bitwig%20Studio/$TargetVersion/installer_windows/"
+                Checksum = 'PLACEHOLDER_CHECKSUM_REPLACE_MANUALLY'
+                ProductCode = $null
+            }
+        )
     }
-    
-    $installerUrl = "https://www.bitwig.com/dl/Bitwig%20Studio/$Version/installer_windows/"
-    Write-ColorText "Downloading installer from: $installerUrl" "Yellow"
-    
-    # Create temp directory
-    $tempDir = New-Item -ItemType Directory -Path "temp_bitwig_$Version" -Force
-    $installerPath = Join-Path $tempDir "bitwig_installer.msi"
-    
-    try {
-        # Test if the URL is accessible
-        $headRequest = Invoke-WebRequest -Uri $installerUrl -Method Head -UseBasicParsing
-        Write-ColorText "Installer URL is accessible (Status: $($headRequest.StatusCode))" "Green"
-        
-        # Download the installer
-        Write-ColorText "Downloading installer..." "Yellow"
-        Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
-        
-        # Calculate SHA256 checksum
-        Write-ColorText "Calculating checksum..." "Yellow"
-        $hash = Get-FileHash -Path $installerPath -Algorithm SHA256
-        $checksum = $hash.Hash
-        
-        Write-ColorText "Download completed successfully" "Green"
-        Write-ColorText "SHA256: $checksum" "Cyan"
-        
-        return @{
-            Url = $installerUrl
-            Checksum = $checksum
+
+    $installerCandidates = @(
+        [pscustomobject]@{
+            Architecture = 'x64'
+            Url = "$BaseUrl/dl/Bitwig%20Studio/$TargetVersion/installer_windows/"
+            FileName = 'bitwig-x64.msi'
+            Required = $true
+        },
+        [pscustomobject]@{
+            Architecture = 'arm64'
+            Url = "$BaseUrl/dl/Bitwig%20Studio/$TargetVersion/installer_windowsarm/"
+            FileName = 'bitwig-arm64.msi'
+            Required = $false
         }
-    } catch {
-        Write-ColorText "Error downloading installer: $_" "Red"
-        throw
+    )
+
+    $tempDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("bitwig-{0}" -f ([guid]::NewGuid().ToString('N')))
+    $null = New-Item -ItemType Directory -Path $tempDirectory -Force
+
+    try {
+        $installerInfo = [System.Collections.Generic.List[object]]::new()
+
+        foreach ($candidate in $installerCandidates) {
+            $installerPath = Join-Path $tempDirectory $candidate.FileName
+            Write-ColorText "Downloading $($candidate.Architecture) installer from $($candidate.Url)" 'Yellow'
+
+            try {
+                Invoke-WebRequest -Uri $candidate.Url -OutFile $installerPath -UseBasicParsing
+            } catch {
+                if ($candidate.Required) {
+                    throw
+                }
+
+                Write-ColorText "Skipping unavailable $($candidate.Architecture) installer. $_" 'Yellow'
+                continue
+            }
+
+            $checksum = (Get-FileHash -Path $installerPath -Algorithm SHA256).Hash
+            $productCode = Get-MsiProductCode -InstallerPath $installerPath
+
+            $installerInfo.Add([pscustomobject]@{
+                Architecture = $candidate.Architecture
+                Url = $candidate.Url
+                Checksum = $checksum
+                ProductCode = $productCode
+            })
+        }
+
+        if ($installerInfo.Count -eq 0) {
+            throw 'No downloadable Bitwig installers were found.'
+        }
+
+        return $installerInfo
     } finally {
-        # Clean up temp directory
-        if (Test-Path $tempDir) {
-            Remove-Item $tempDir -Recurse -Force
+        if (Test-Path $tempDirectory) {
+            Remove-Item -Path $tempDirectory -Recurse -Force
         }
     }
 }
 
-function New-ManifestFiles {
-    param(
-        [string]$Version,
-        [hashtable]$InstallerInfo
-    )
-    
-    Write-ColorText "Creating manifest files for version $Version..." "Yellow"
-    
-    # Create manifest directory
-    $manifestDir = "manifests\b\bitwig\bitwig\$Version"
-    if (Test-Path $manifestDir) {
-        if (-not $Force) {
-            Write-ColorText "Manifest directory already exists. Use -Force to overwrite." "Red"
-            throw "Manifest already exists"
-        } else {
-            Write-ColorText "Removing existing manifest directory..." "Yellow"
-            Remove-Item $manifestDir -Recurse -Force
-        }
-    }
-    
-    New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null
-    
-    $currentYear = (Get-Date).Year
-    
-    # Version manifest
-    $versionManifest = @"
+function New-VersionManifest {
+    param([Parameter(Mandatory = $true)][string]$TargetVersion)
+
+@"
 # Created with automated Bitwig updater
-# yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json
+# yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.$ManifestSchemaVersion.schema.json
 
 PackageIdentifier: $PackageIdentifier
-PackageVersion: $Version
+PackageVersion: $TargetVersion
 DefaultLocale: en-US
 ManifestType: version
-ManifestVersion: 1.10.0
+ManifestVersion: $ManifestSchemaVersion
 "@
-    
-    # Installer manifest
-    $installerManifest = @"
+}
+
+function New-InstallerManifest {
+    param(
+        [Parameter(Mandatory = $true)][string]$TargetVersion,
+        [Parameter(Mandatory = $true)][System.Collections.IEnumerable]$InstallerInfo
+    )
+
+    $installerBlock = foreach ($installer in $InstallerInfo) {
+        "- Architecture: $($installer.Architecture)"
+        "  InstallerUrl: $($installer.Url)"
+        "  InstallerSha256: $($installer.Checksum)"
+
+        if ($installer.ProductCode) {
+            "  ProductCode: '$($installer.ProductCode)'"
+        }
+    }
+
+@"
 # Created with automated Bitwig updater
-# yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+# yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.$ManifestSchemaVersion.schema.json
 
 PackageIdentifier: $PackageIdentifier
-PackageVersion: $Version
+PackageVersion: $TargetVersion
 Platform:
 - Windows.Desktop
 MinimumOSVersion: 10.0.0.0
@@ -186,20 +263,23 @@ FileExtensions:
 - bwproject
 - bwtemplate
 Installers:
-- Architecture: x64
-  InstallerUrl: $($InstallerInfo.Url)
-  InstallerSha256: $($InstallerInfo.Checksum)
+$($installerBlock -join "`n")
 ManifestType: installer
-ManifestVersion: 1.10.0
+ManifestVersion: $ManifestSchemaVersion
 "@
-    
-    # Locale manifest
-    $localeManifest = @"
+}
+
+function New-LocaleManifest {
+    param([Parameter(Mandatory = $true)][string]$TargetVersion)
+
+    $currentYear = (Get-Date).Year
+
+@"
 # Created with automated Bitwig updater
-# yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+# yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.$ManifestSchemaVersion.schema.json
 
 PackageIdentifier: $PackageIdentifier
-PackageVersion: $Version
+PackageVersion: $TargetVersion
 PackageLocale: en-US
 Publisher: $PublisherName
 PublisherUrl: $BaseUrl/
@@ -220,112 +300,88 @@ Tags:
 - music
 - vst
 - vsti
-ReleaseNotesUrl: $BaseUrl/dl/Bitwig%20Studio/$Version/release_notes/
 ManifestType: defaultLocale
-ManifestVersion: 1.10.0
+ManifestVersion: $ManifestSchemaVersion
 "@
-    
-    # Write manifest files
-    $versionManifest | Out-File -FilePath "$manifestDir\bitwig.bitwig.yaml" -Encoding UTF8 -NoNewline
-    $installerManifest | Out-File -FilePath "$manifestDir\bitwig.bitwig.installer.yaml" -Encoding UTF8 -NoNewline
-    $localeManifest | Out-File -FilePath "$manifestDir\bitwig.bitwig.locale.en-US.yaml" -Encoding UTF8 -NoNewline
-    
-    Write-ColorText "Manifest files created successfully!" "Green"
-    Write-ColorText "Location: $manifestDir" "Cyan"
+}
+
+function New-ManifestFiles {
+    param(
+        [Parameter(Mandatory = $true)][string]$TargetVersion,
+        [Parameter(Mandatory = $true)][System.Collections.IEnumerable]$InstallerInfo
+    )
+
+    $manifestDirectory = Join-Path $ManifestRoot $TargetVersion
+
+    if (Test-Path $manifestDirectory) {
+        if (-not $Force) {
+            throw "Manifest directory already exists: $manifestDirectory"
+        }
+
+        Remove-Item -Path $manifestDirectory -Recurse -Force
+    }
+
+    $null = New-Item -ItemType Directory -Path $manifestDirectory -Force
+
+    Set-Content -Path (Join-Path $manifestDirectory 'bitwig.bitwig.yaml') -Value (New-VersionManifest -TargetVersion $TargetVersion) -Encoding utf8
+    Set-Content -Path (Join-Path $manifestDirectory 'bitwig.bitwig.installer.yaml') -Value (New-InstallerManifest -TargetVersion $TargetVersion -InstallerInfo $InstallerInfo) -Encoding utf8
+    Set-Content -Path (Join-Path $manifestDirectory 'bitwig.bitwig.locale.en-US.yaml') -Value (New-LocaleManifest -TargetVersion $TargetVersion) -Encoding utf8
+
+    Write-ColorText "Manifest files created in $manifestDirectory" 'Green'
+    return $manifestDirectory
 }
 
 function Test-ManifestFiles {
-    param([string]$Version)
-    
-    Write-ColorText "Validating manifest files..." "Yellow"
-    
-    $manifestDir = "manifests\b\bitwig\bitwig\$Version"
-    $expectedFiles = @(
-        "bitwig.bitwig.yaml",
-        "bitwig.bitwig.installer.yaml",
-        "bitwig.bitwig.locale.en-US.yaml"
-    )
-    
-    foreach ($file in $expectedFiles) {
-        $filePath = Join-Path $manifestDir $file
-        if (-not (Test-Path $filePath)) {
-            Write-ColorText "Error: $file not found" "Red"
-            return $false
-        }
-        
-        $content = Get-Content $filePath -Raw
-        if ([string]::IsNullOrWhiteSpace($content)) {
-            Write-ColorText "Error: $file is empty" "Red"
-            return $false
-        }
-        
-        # Basic YAML validation - check for required fields
-        if ($file -eq "bitwig.bitwig.yaml" -and $content -notmatch "PackageIdentifier: $PackageIdentifier") {
-            Write-ColorText "Error: Invalid version manifest" "Red"
-            return $false
-        }
-        
-        if ($file -eq "bitwig.bitwig.installer.yaml" -and $content -notmatch "InstallerSha256:") {
-            Write-ColorText "Error: Invalid installer manifest" "Red"
-            return $false
-        }
+    param([Parameter(Mandatory = $true)][string]$ManifestDirectory)
+
+    if ($SkipDownload) {
+        Write-ColorText 'Skipping winget validation because downloads were skipped.' 'Yellow'
+        return
     }
-    
-    Write-ColorText "All manifest files validated successfully!" "Green"
-    return $true
+
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        throw 'winget is required to validate generated manifests.'
+    }
+
+    Write-ColorText 'Validating manifests with winget...' 'Yellow'
+    & winget validate --manifest $ManifestDirectory
+
+    if ($LASTEXITCODE -ne 0) {
+        throw 'winget validate reported manifest errors.'
+    }
+
+    Write-ColorText 'winget validation completed successfully.' 'Green'
 }
 
-# Main execution
 try {
-    Write-ColorText "=== Bitwig Studio Manifest Updater ===" "Cyan"
-    Write-ColorText "Package: $PackageIdentifier" "White"
-    
-    # Determine version to process
-    if ($Version) {
-        $targetVersion = $Version
-        Write-ColorText "Using specified version: $targetVersion" "Yellow"
-    } else {
-        $targetVersion = Get-LatestBitwigVersion
+    Write-ColorText '=== Bitwig Studio Manifest Updater ===' 'Cyan'
+    Write-ColorText "Package: $PackageIdentifier" 'White'
+
+    $currentVersion = Get-CurrentVersion
+    Set-ActionOutput -Name 'current-version' -Value $currentVersion
+
+    $targetVersion = if ($Version) { $Version } else { Get-LatestBitwigVersion }
+    $relativeManifestDirectory = "manifests/b/bitwig/bitwig/$targetVersion"
+    Set-ActionOutput -Name 'new-version' -Value $targetVersion
+    Set-ActionOutput -Name 'manifest-dir' -Value $relativeManifestDirectory
+
+    if ((Test-VersionExists -TargetVersion $targetVersion) -and -not $Force) {
+        Write-ColorText "Version $targetVersion already exists in manifests." 'Yellow'
+        Set-ActionOutput -Name 'needs-update' -Value 'false'
+        exit 0
     }
-    
-    # Check if version already exists
-    if (Test-VersionExists $targetVersion) {
-        if (-not $Force) {
-            Write-ColorText "Version $targetVersion already exists in manifests." "Yellow"
-            Write-ColorText "Use -Force to overwrite existing manifests." "White"
-            exit 0
-        } else {
-            Write-ColorText "Version $targetVersion exists, but Force flag is set." "Yellow"
-        }
+
+    $installerInfo = Get-InstallerInfo -TargetVersion $targetVersion
+    $manifestDirectory = New-ManifestFiles -TargetVersion $targetVersion -InstallerInfo $installerInfo
+    Test-ManifestFiles -ManifestDirectory $manifestDirectory
+
+    Set-ActionOutput -Name 'needs-update' -Value 'true'
+    Write-ColorText "✅ Successfully prepared manifests for Bitwig Studio $targetVersion" 'Green'
+
+    if ($SkipDownload) {
+        Write-ColorText '⚠️ Update the placeholder checksum and rerun without -SkipDownload before submitting.' 'Yellow'
     }
-    
-    # Get installer information
-    $installerInfo = Get-InstallerInfo $targetVersion
-    
-    # Create manifest files
-    New-ManifestFiles -Version $targetVersion -InstallerInfo $installerInfo
-    
-    # Validate manifests
-    if (Test-ManifestFiles $targetVersion) {
-        Write-ColorText "✅ Successfully created manifests for Bitwig Studio $targetVersion" "Green"
-        
-        if (-not $SkipDownload) {
-            Write-ColorText "" "White"
-            Write-ColorText "Next steps:" "Yellow"
-            Write-ColorText "1. Review the generated manifest files" "White"
-            Write-ColorText "2. Test the installation using winget" "White"
-            Write-ColorText "3. Commit and push the changes" "White"
-            Write-ColorText "4. Create a pull request" "White"
-        } else {
-            Write-ColorText "" "White"
-            Write-ColorText "⚠️  Note: Checksum is placeholder. Update manually before submitting." "Yellow"
-        }
-    } else {
-        Write-ColorText "❌ Manifest validation failed" "Red"
-        exit 1
-    }
-    
 } catch {
-    Write-ColorText "❌ Error: $_" "Red"
-    exit 1
+    Write-ColorText "❌ Error: $_" 'Red'
+    throw
 }
