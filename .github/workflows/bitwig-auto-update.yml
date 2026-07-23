@@ -74,11 +74,9 @@ jobs:
             - ✅ Generated manifests in the current winget-pkgs format
             - ✅ Ran `winget validate`
 
-            ### Notes
-            - This workflow creates a review PR in this fork only.
-            - The review PR always targets your fork's `master` branch so automation-only files stay out of upstream submission branches.
-            - If you keep automation isolated on an `automation` branch, make that branch the fork's default branch so the scheduled run stays active.
-            - Review the generated manifests before copying them into a clean upstream contribution branch.
+            ### Ready to Submit
+            This branch contains only the new manifest files and is branched from `master`.
+            Once you have reviewed the changes, this PR can be submitted directly to upstream [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) without any manual file copying.
 
   notify:
     needs: update
@@ -113,10 +111,10 @@ jobs:
               <li>Generated the Bitwig manifest set</li>
               <li>Validated the manifests with <code>winget validate</code></li>
             </ul>
-            <h3>🚀 Next Step</h3>
-            <p>Review the PR in your fork, then copy the manifest folder into a clean upstream contribution branch when you're ready to submit it.</p>
+            <h3>🚀 Ready to Submit</h3>
+            <p>The PR branch contains only the new manifest files and is branched from <code>master</code>. Review the changes, then submit this PR directly to upstream <a href="https://github.com/microsoft/winget-pkgs">microsoft/winget-pkgs</a> — no manual file copying needed.</p>
 
-      - name: Create PR Comment Notification
+      - name: Create GitHub Issue Notification
         if: needs.update.outputs.needs-update == 'true' && needs.update.outputs.pull-request-number != ''
         uses: actions/github-script@v7
         with:
@@ -137,16 +135,25 @@ jobs:
               '- [x] Generated a complete manifest set',
               '- [x] Validated the manifests with winget validate',
               '',
-              '### 🚀 Next Step',
-              `Review the fork PR, then copy manifests/b/bitwig/bitwig/${version} into a clean upstream contribution branch when you're ready to submit it.`
+              '### 🚀 Ready to Submit',
+              `The PR branch contains only the new manifest files and is branched from \`master\`. Review the changes at ${pullRequestUrl}, then submit the PR directly to upstream microsoft/winget-pkgs — no manual file copying needed.`
             ].join('\n');
 
-            await github.rest.issues.createComment({
+            const params = {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: ${{ needs.update.outputs.pull-request-number }},
-              body
-            });
+              title: `🎵 Bitwig Studio ${version} Ready for Review`,
+              body,
+              labels: ['automation', 'bitwig-studio', 'ready-for-review']
+            };
+
+            try {
+              await github.rest.issues.create(params);
+            } catch (error) {
+              core.warning(`Falling back to an unlabeled issue: ${error.message}`);
+              delete params.labels;
+              await github.rest.issues.create(params);
+            }
 
       - name: Send Discord Notification
         if: needs.update.outputs.needs-update == 'true' && needs.update.outputs.pull-request-number != '' && env.DISCORD_WEBHOOK != ''
@@ -156,7 +163,7 @@ jobs:
             "embeds": [
               {
                 "title": "🎵 New Bitwig Studio Release Ready",
-                "description": "Version ${{ needs.update.outputs.new-version }} is ready for review in your fork.",
+                "description": "Version ${{ needs.update.outputs.new-version }} is ready to submit to upstream. Review the PR, then submit it directly to microsoft/winget-pkgs — no manual file copying needed.",
                 "color": 3066993,
                 "fields": [
                   {
