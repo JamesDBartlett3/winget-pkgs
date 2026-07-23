@@ -354,6 +354,7 @@ function Test-ManifestFiles {
         throw 'winget validate reported manifest errors.'
     }
 
+    $global:LASTEXITCODE = 0
     Write-ColorText 'winget validation completed successfully.' 'Green'
 }
 
