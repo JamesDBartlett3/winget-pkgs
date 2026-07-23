@@ -123,21 +123,22 @@ jobs:
             const version = '${{ needs.update.outputs.new-version }}';
             const previousVersion = '${{ needs.update.outputs.current-version }}';
             const pullRequestUrl = '${{ needs.update.outputs.pull-request-url }}';
-            const body = `## 🎵 New Bitwig Studio Version Ready for Review
-
-**Version:** ${version}
-**Previous Version:** ${previousVersion}
-**Review PR:** ${pullRequestUrl}
-
-### ✅ Automation Completed
-- [x] Downloaded the available Bitwig installers from the official site
-- [x] Calculated SHA256 checksums
-- [x] Generated a complete manifest set
-- [x] Validated the manifests with winget validate
-
-### 🚀 Next Step
-Review the fork PR, then copy manifests/b/bitwig/bitwig/${version} into a clean upstream contribution branch when you're ready to submit it.
-`;
+            const body = [
+              '## 🎵 New Bitwig Studio Version Ready for Review',
+              '',
+              `**Version:** ${version}`,
+              `**Previous Version:** ${previousVersion}`,
+              `**Review PR:** ${pullRequestUrl}`,
+              '',
+              '### ✅ Automation Completed',
+              '- [x] Downloaded the available Bitwig installers from the official site',
+              '- [x] Calculated SHA256 checksums',
+              '- [x] Generated a complete manifest set',
+              '- [x] Validated the manifests with winget validate',
+              '',
+              '### 🚀 Next Step',
+              `Review the fork PR, then copy manifests/b/bitwig/bitwig/${version} into a clean upstream contribution branch when you're ready to submit it.`
+            ].join('\n');
 
             const params = {
               owner: context.repo.owner,
