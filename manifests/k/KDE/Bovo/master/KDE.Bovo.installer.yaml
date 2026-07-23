@@ -1,5 +1,5 @@
 # Created with YamlCreate.ps1 Dumplings Mod
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 
 PackageIdentifier: KDE.Bovo
 PackageVersion: master
@@ -9,15 +9,15 @@ ProductCode: bovo
 Installers:
 - Architecture: x64
   Scope: user
-  InstallerUrl: https://cdn.kde.org/ci-builds/games/bovo/master/windows/bovo-master-694-windows-cl-msvc2022-x86_64.exe
-  InstallerSha256: 20278CCB34A8E0B253DC3A0017AEBA26F42A383BD53DBD1A9CD431BB6EC95005
+  InstallerUrl: https://cdn.kde.org/ci-builds/games/bovo/master/windows/bovo-master-863-windows-cl-msvc2022-x86_64.exe
+  InstallerSha256: 23F16C5C0517B85CA5A478785CF9E8EB0559A3E69225B6F63B86E25D374C8887
   InstallerSwitches:
     Custom: /CurrentUser
 - Architecture: x64
   Scope: machine
-  InstallerUrl: https://cdn.kde.org/ci-builds/games/bovo/master/windows/bovo-master-694-windows-cl-msvc2022-x86_64.exe
-  InstallerSha256: 20278CCB34A8E0B253DC3A0017AEBA26F42A383BD53DBD1A9CD431BB6EC95005
+  InstallerUrl: https://cdn.kde.org/ci-builds/games/bovo/master/windows/bovo-master-863-windows-cl-msvc2022-x86_64.exe
+  InstallerSha256: 23F16C5C0517B85CA5A478785CF9E8EB0559A3E69225B6F63B86E25D374C8887
   InstallerSwitches:
     Custom: /AllUsers
 ManifestType: installer
-ManifestVersion: 1.10.0
+ManifestVersion: 1.12.0

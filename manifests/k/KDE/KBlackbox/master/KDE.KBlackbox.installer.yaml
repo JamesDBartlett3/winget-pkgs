@@ -1,5 +1,5 @@
 # Created with YamlCreate.ps1 Dumplings Mod
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 
 PackageIdentifier: KDE.KBlackbox
 PackageVersion: master
@@ -9,15 +9,15 @@ ProductCode: kblackbox
 Installers:
 - Architecture: x64
   Scope: user
-  InstallerUrl: https://cdn.kde.org/ci-builds/games/kblackbox/master/windows/kblackbox-master-713-windows-cl-msvc2022-x86_64.exe
-  InstallerSha256: CD3A361D714E9DDAFB0306D01AE34C1C04ABB98113D4D7D790EE6CA323A1C169
+  InstallerUrl: https://cdn.kde.org/ci-builds/games/kblackbox/master/windows/kblackbox-master-880-windows-cl-msvc2022-x86_64.exe
+  InstallerSha256: A7275D540B458C36965197599CA90D747A5DAF6E463AE1A1C01DA3C186CDB034
   InstallerSwitches:
     Custom: /CurrentUser
 - Architecture: x64
   Scope: machine
-  InstallerUrl: https://cdn.kde.org/ci-builds/games/kblackbox/master/windows/kblackbox-master-713-windows-cl-msvc2022-x86_64.exe
-  InstallerSha256: CD3A361D714E9DDAFB0306D01AE34C1C04ABB98113D4D7D790EE6CA323A1C169
+  InstallerUrl: https://cdn.kde.org/ci-builds/games/kblackbox/master/windows/kblackbox-master-880-windows-cl-msvc2022-x86_64.exe
+  InstallerSha256: A7275D540B458C36965197599CA90D747A5DAF6E463AE1A1C01DA3C186CDB034
   InstallerSwitches:
     Custom: /AllUsers
 ManifestType: installer
-ManifestVersion: 1.10.0
+ManifestVersion: 1.12.0

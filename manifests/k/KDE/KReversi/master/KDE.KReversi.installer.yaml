@@ -1,5 +1,5 @@
 # Created with YamlCreate.ps1 Dumplings Mod
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 
 PackageIdentifier: KDE.KReversi
 PackageVersion: master
@@ -9,15 +9,15 @@ ProductCode: kreversi
 Installers:
 - Architecture: x64
   Scope: user
-  InstallerUrl: https://cdn.kde.org/ci-builds/games/kreversi/master/windows/kreversi-master-751-windows-cl-msvc2022-x86_64.exe
-  InstallerSha256: 574E21B860FC3790882E39A022B7699C03DB7930F1E68DB513DC9401BD3F8731
+  InstallerUrl: https://cdn.kde.org/ci-builds/games/kreversi/master/windows/kreversi-master-925-windows-cl-msvc2022-x86_64.exe
+  InstallerSha256: 899683F2F99E9F9B6A12E712FCB9C75D0FAD0606087AD9CD85A97D2A65382CE1
   InstallerSwitches:
     Custom: /CurrentUser
 - Architecture: x64
   Scope: machine
-  InstallerUrl: https://cdn.kde.org/ci-builds/games/kreversi/master/windows/kreversi-master-751-windows-cl-msvc2022-x86_64.exe
-  InstallerSha256: 574E21B860FC3790882E39A022B7699C03DB7930F1E68DB513DC9401BD3F8731
+  InstallerUrl: https://cdn.kde.org/ci-builds/games/kreversi/master/windows/kreversi-master-925-windows-cl-msvc2022-x86_64.exe
+  InstallerSha256: 899683F2F99E9F9B6A12E712FCB9C75D0FAD0606087AD9CD85A97D2A65382CE1
   InstallerSwitches:
     Custom: /AllUsers
 ManifestType: installer
-ManifestVersion: 1.10.0
+ManifestVersion: 1.12.0
