@@ -346,7 +346,11 @@ function Test-ManifestFiles {
     Write-ColorText 'Validating manifests with winget...' 'Yellow'
     & winget validate --manifest $ManifestDirectory
 
-    if ($LASTEXITCODE -ne 0) {
+    # winget uses a distinct exit code (APPINSTALLER_CLI_ERROR_MANIFEST_VALIDATION_WARNING,
+    # 0x8A150028 / -1978335192) to signal that validation succeeded but produced non-fatal
+    # warnings. Only treat other non-zero exit codes as real validation failures.
+    $manifestValidationWarningExitCode = -1978335192
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $manifestValidationWarningExitCode) {
         throw 'winget validate reported manifest errors.'
     }
 
