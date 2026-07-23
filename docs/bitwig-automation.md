@@ -1,6 +1,6 @@
 # Bitwig Studio Automation for winget-pkgs
 
-This automation keeps the Bitwig Studio package in a fork up to date by checking for new releases, generating a current manifest set, validating it, and opening a review PR in the fork.
+This automation keeps the Bitwig Studio package in a fork up to date by checking for new releases, generating a current manifest set, validating it, and opening a review PR into your fork's `master` branch.
 
 ## 🤖 What it does
 
@@ -67,7 +67,7 @@ You can also run the update script manually:
 4. **Metadata**: Calculates SHA256 hashes and reads MSI ProductCodes when they are available
 5. **Manifest Creation**: Generates all three required YAML files
 6. **Validation**: Runs `winget validate --manifest <folder>`
-7. **Pull Request**: Opens a review PR in your fork
+7. **Pull Request**: Opens a review PR in your fork, always targeting `master`
 
 ### URL Pattern
 
@@ -113,5 +113,6 @@ This workflow intentionally stops after creating a review PR in your fork. Once 
 ## 📝 Notes
 
 - The automation is designed for a fork, not for direct submission to the upstream repository.
+- Review PRs are always based on your fork's `master` branch so automation-only branch content is excluded.
 - `-SkipDownload` is only for dry runs; it does not produce submission-ready manifests.
 - The workflow validates generated manifests before opening a PR.

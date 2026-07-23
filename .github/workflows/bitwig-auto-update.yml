@@ -55,7 +55,7 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           branch: bitwig-studio-${{ steps.update-manifest.outputs.new-version }}
-          base: ${{ github.ref_name }}
+          base: master
           delete-branch: true
           add-paths: |
             manifests/b/bitwig/bitwig/${{ steps.update-manifest.outputs.new-version }}
@@ -76,6 +76,7 @@ jobs:
 
             ### Notes
             - This workflow creates a review PR in this fork only.
+            - The review PR always targets your fork's `master` branch so automation-only files stay out of upstream submission branches.
             - If you keep automation isolated on an `automation` branch, make that branch the fork's default branch so the scheduled run stays active.
             - Review the generated manifests before copying them into a clean upstream contribution branch.
 
