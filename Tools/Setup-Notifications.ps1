@@ -175,7 +175,7 @@ function Show-Summary {
     Write-ColorText "2. 📦 Detects new Bitwig Studio releases" "White"
     Write-ColorText "3. ⬇️ Downloads and verifies installers" "White"
     Write-ColorText "4. 📝 Creates complete manifest files" "White"
-    Write-ColorText "5. 🔄 Creates PR in your fork (automation branch)" "White"
+    Write-ColorText "5. 🔄 Creates PR in your fork (targets master with manifest-only changes)" "White"
     Write-ColorText "6. 📱 Sends you notifications (based on your setup)" "Green"
     Write-Host ""
     
